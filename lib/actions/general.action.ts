@@ -90,28 +90,13 @@ export async function getFeedbackByInterviewId(
   return { id: feedbackDoc.id, ...feedbackDoc.data() } as Feedback;
 }
 
-export async function getLatestInterviews(
-  params: GetLatestInterviewsParams
-): Promise<Interview[] | null> {
-  const { userId, limit = 20 } = params;
-
-  const interviews = await db
-    .collection("interviews")
-    .orderBy("createdAt", "desc")
-    .where("finalized", "==", true)
-    .where("userId", "!=", userId)
-    .limit(limit)
-    .get();
-
-  return interviews.docs.map((doc) => ({
-    id: doc.id,
-    ...doc.data(),
-  })) as Interview[];
-}
-
 export async function getInterviewsByUserId(
-  userId: string
-): Promise<Interview[] | null> {
+  userId?: string
+): Promise<Interview[]> {
+  if (!userId) {
+    return []; // 🔐 critical guard
+  }
+
   const interviews = await db
     .collection("interviews")
     .where("userId", "==", userId)
@@ -123,3 +108,28 @@ export async function getInterviewsByUserId(
     ...doc.data(),
   })) as Interview[];
 }
+export async function getLatestInterviews(
+  params: GetLatestInterviewsParams
+): Promise<Interview[]> {
+  const { userId, limit = 20 } = params;
+
+  // 🔐 ABSOLUTE MUST
+  if (!userId) {
+    return [];
+  }
+
+  const interviews = await db
+    .collection("interviews")
+    .where("finalized", "==", true)
+    .where("userId", "!=", userId)
+    .orderBy("userId")          // REQUIRED when using !=
+    .orderBy("createdAt", "desc")
+    .limit(limit)
+    .get();
+
+  return interviews.docs.map((doc) => ({
+    id: doc.id,
+    ...doc.data(),
+  })) as Interview[];
+}
+
