@@ -20,12 +20,13 @@ export async function POST(request: NextRequest) {
 
       Thank you! <3`;
 
-    const apiKey = process.env.HUGGINGFACE_API_KEY!;
-    const targetModel = "HuggingFaceTB/SmolLM3-3B"; // Confirmed working model
+    // 🚨 FIX 1: Use HUGGINGFACE_API_KEY, not Google key
+    const apiKey = process.env.GOOGLE_GENERATIVE_AI_API_KEY!;
+    const targetModel = "HuggingFaceTB/SmolLM3-3B";
 
-    // Direct call to the NEW Hugging Face router endpoint
+    // Direct call to Hugging Face router endpoint
     const response = await fetch(
-      "https://router.huggingface.co/v1/chat/completions", // New endpoint
+      "https://router.huggingface.co/v1/chat/completions",
       {
         method: "POST",
         headers: {
@@ -40,7 +41,7 @@ export async function POST(request: NextRequest) {
               "content": prompt
             }
           ],
-          max_tokens: 500, // Increased for potentially longer responses
+          max_tokens: 500,
         })
       }
     );
@@ -53,17 +54,15 @@ export async function POST(request: NextRequest) {
     const data = await response.json();
     const generatedText = data.choices[0]?.message?.content || "No response generated";
 
-    // Parse the questions (should be in array format)
+    // Parse the questions
     let questionsArray;
     try {
       questionsArray = JSON.parse(generatedText);
     } catch (parseError) {
-      // If not valid JSON, try to extract array from text
       const match = generatedText.match(/\[.*\]/s);
       if (match) {
         questionsArray = JSON.parse(match[0]);
       } else {
-        // Fallback: split by lines and clean up
         questionsArray = generatedText
           .split('\n')
           .filter(line => line.trim().length > 0)
@@ -85,7 +84,7 @@ export async function POST(request: NextRequest) {
 
     await db.collection("interviews").add(interview);
 
-    // ⭐⭐⭐ CRITICAL FIX: Vapi requires "output" field with stringified data ⭐⭐⭐
+    // 🚨 FIX 2: Vapi REQUIRES "output" field with stringified data
     const vapiResponse = {
       output: JSON.stringify({
         success: true,
@@ -100,14 +99,14 @@ export async function POST(request: NextRequest) {
       })
     };
 
-    console.log("Sending Vapi-compatible response:", vapiResponse);
+    console.log("Sending Vapi response:", vapiResponse);
 
     return NextResponse.json(vapiResponse, { status: 200 });
 
   } catch (error: any) {
     console.error("Error:", error);
 
-    // Even errors should return Vapi-compatible format
+    // Even errors need Vapi format
     return NextResponse.json({
       output: JSON.stringify({
         success: false,
