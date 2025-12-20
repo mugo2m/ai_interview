@@ -1,3 +1,5 @@
+"use client";
+
 import { Controller, Control, FieldValues, Path } from "react-hook-form";
 
 import {
@@ -14,6 +16,7 @@ interface FormFieldProps<T extends FieldValues> {
   label: string;
   placeholder?: string;
   type?: "text" | "email" | "password";
+  fieldId?: string; // Added stable field ID
 }
 
 const FormField = <T extends FieldValues>({
@@ -22,6 +25,7 @@ const FormField = <T extends FieldValues>({
   label,
   placeholder,
   type = "text",
+  fieldId,
 }: FormFieldProps<T>) => {
   return (
     <Controller
@@ -29,10 +33,10 @@ const FormField = <T extends FieldValues>({
       name={name}
       render={({ field }) => (
         <FormItem>
-          <FormLabel className="label">{label}</FormLabel>
+          <FormLabel htmlFor={fieldId}>{label}</FormLabel>
           <FormControl>
             <Input
-              className="input"
+              id={fieldId}
               type={type}
               placeholder={placeholder}
               {...field}

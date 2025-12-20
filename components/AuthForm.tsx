@@ -119,6 +119,7 @@ const AuthForm = ({ type }: { type: FormType }) => {
                 label="Name"
                 placeholder="Your Name"
                 type="text"
+                fieldId="name-field"
               />
             )}
 
@@ -128,6 +129,7 @@ const AuthForm = ({ type }: { type: FormType }) => {
               label="Email"
               placeholder="Your email address"
               type="email"
+              fieldId="email-field"
             />
 
             <FormField
@@ -136,6 +138,7 @@ const AuthForm = ({ type }: { type: FormType }) => {
               label="Password"
               placeholder="Enter your password"
               type="password"
+              fieldId="password-field"
             />
 
             <Button className="btn" type="submit">
