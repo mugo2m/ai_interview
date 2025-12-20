@@ -20,7 +20,7 @@ export async function POST(request: NextRequest) {
 
       Thank you! <3`;
 
-    const apiKey = process.env.GOOGLE_GENERATIVE_AI_API_KEY!;
+    const apiKey = process.env.HUGGINGFACE_API_KEY!;
     const targetModel = "HuggingFaceTB/SmolLM3-3B"; // Confirmed working model
 
     // Direct call to the NEW Hugging Face router endpoint
@@ -85,16 +85,44 @@ export async function POST(request: NextRequest) {
 
     await db.collection("interviews").add(interview);
 
-    return NextResponse.json({ success: true }, { status: 200 });
+    // ⭐⭐⭐ CRITICAL FIX: Vapi requires "output" field with stringified data ⭐⭐⭐
+    const vapiResponse = {
+      output: JSON.stringify({
+        success: true,
+        questions: questionsArray,
+        count: questionsArray.length,
+        role: role,
+        level: level,
+        techstack: techstack,
+        type: type,
+        userid: userid,
+        message: `Generated ${questionsArray.length} questions for ${role} position`
+      })
+    };
+
+    console.log("Sending Vapi-compatible response:", vapiResponse);
+
+    return NextResponse.json(vapiResponse, { status: 200 });
+
   } catch (error: any) {
     console.error("Error:", error);
+
+    // Even errors should return Vapi-compatible format
     return NextResponse.json({
-      success: false,
-      error: error.message || "Internal server error"
+      output: JSON.stringify({
+        success: false,
+        error: error.message || "Internal server error"
+      })
     }, { status: 500 });
   }
 }
 
 export async function GET() {
-  return NextResponse.json({ success: true, data: "Thank you!" }, { status: 200 });
+  return NextResponse.json({
+    output: JSON.stringify({
+      success: true,
+      data: "Thank you!",
+      message: "API is working"
+    })
+  }, { status: 200 });
 }
