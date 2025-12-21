@@ -45,19 +45,23 @@ export async function POST(request: NextRequest) {
       userid = "anonymous"
     } = parsedBody;
 
-    // Build the prompt for Hugging Face
-    const prompt = `Prepare questions for a job interview.
-      The job role is ${role}.
-      The job experience level is ${level}.
-      The tech stack used in the job is: ${techstack}.
-      The focus between behavioural and technical questions should lean towards: ${type}.
-      The amount of questions required is: ${amount}.
-      Please return only the questions, without any additional text.
-      The questions are going to be read by a voice assistant so do not use "/" or "*" or any other special characters which might break the voice assistant.
-      Return the questions formatted like this:
-      ["Question 1", "Question 2", "Question 3"]
+    // 🔧 UPDATED: Better prompt for Hugging Face
+    const prompt = `You are a job interview question generator. Generate exactly ${amount} questions for a ${role} position.
+Experience level: ${level}
+Tech stack: ${techstack}
+Question type: ${type}
 
-      Thank you! <3`;
+CRITICAL INSTRUCTIONS:
+1. Return ONLY a JSON array of questions, nothing else
+2. Do not include any explanations, thinking, or additional text
+3. Format strictly as: ["Question 1 text here?", "Question 2 text here?", "Question 3 text here?"]
+4. Questions should be clear and concise for a voice assistant to read
+5. No special characters like / or * that might break voice synthesis
+
+Example response for Data Scientist with SQL/R:
+["How do you optimize SQL queries for large datasets?", "Describe your experience with data visualization in R.", "Tell me about a time you had to explain complex data insights to non-technical stakeholders?"]
+
+Now generate ${amount} ${type} questions for ${role} with ${techstack}:`;
 
     const apiKey = process.env.HUGGINGFACE_API_KEY!;
     const targetModel = "HuggingFaceTB/SmolLM3-3B";
@@ -80,6 +84,7 @@ export async function POST(request: NextRequest) {
             }
           ],
           max_tokens: 500,
+          temperature: 0.7, // Added for better creativity control
         })
       }
     );
@@ -92,45 +97,110 @@ export async function POST(request: NextRequest) {
     const data = await response.json();
     const generatedText = data.choices[0]?.message?.content || "No response generated";
 
-    // Parse the questions (should be in array format)
-    let questionsArray;
-    try {
-      questionsArray = JSON.parse(generatedText);
-    } catch (parseError) {
-      const match = generatedText.match(/\[.*\]/s);
-      if (match) {
-        questionsArray = JSON.parse(match[0]);
-      } else {
-        questionsArray = generatedText
-          .split('\n')
-          .filter(line => line.trim().length > 0)
-          .map(line => line.replace(/^[\d\-\.\s]+/, '').trim());
+    console.log("Raw AI response:", generatedText);
+
+    // 🔧 IMPROVED: Better question parsing
+    let questionsArray = [];
+
+    // Try to extract JSON array with more flexible matching
+    const arrayMatch = generatedText.match(/\[\s*["'][^\[\]]*["'](?:\s*,\s*["'][^\[\]]*["'])*\s*\]/s);
+
+    if (arrayMatch) {
+      try {
+        questionsArray = JSON.parse(arrayMatch[0]);
+        console.log("Found array via regex:", questionsArray);
+      } catch (parseError) {
+        console.log("Regex match found but failed to parse:", arrayMatch[0]);
+        // Try cleaning the matched text
+        try {
+          const cleanMatch = arrayMatch[0]
+            .replace(/[\n\r]/g, '')
+            .replace(/\s+/g, ' ')
+            .trim();
+          questionsArray = JSON.parse(cleanMatch);
+        } catch (cleanError) {
+          console.log("Failed to parse even after cleaning");
+        }
       }
     }
 
-    // ✅ FINAL FIX: Clean the questions array - remove <think> tags and reasoning text
-    const cleanQuestionsArray = questionsArray.filter(item => {
-      const lowerItem = item.toLowerCase();
-      return (
-        item !== "<think>" &&
-        item !== "</think>" &&
-        !lowerItem.includes("okay, let's see") &&
-        !lowerItem.includes("first, for technical questions") &&
-        !lowerItem.includes("behavioral questions are about") &&
-        !lowerItem.includes("since it's entry-level") &&
-        !lowerItem.includes("i need to make sure") &&
-        !lowerItem.includes("let me draft them") &&
-        !lowerItem.includes("that should cover the mix") &&
-        !lowerItem.includes("alright, that should work")
-      );
-    });
+    // If no array found, try to extract questions from text
+    if (questionsArray.length === 0) {
+      console.log("No array found, extracting from text...");
+
+      // Look for question patterns in the text
+      const questionPatterns = [
+        /["']([^"']+\?)["']/g,  // Text in quotes ending with ?
+        /\d+\.\s*([^\n]+\?)/g,   // Numbered questions: 1. Question?
+        /-\s*([^\n]+\?)/g,       // Bullet questions: - Question?
+        /\*\s*([^\n]+\?)/g,      // Star questions: * Question?
+        /([A-Z][^.!?]*\?)/g      // Any sentence ending with ?
+      ];
+
+      for (const pattern of questionPatterns) {
+        const matches = generatedText.match(pattern);
+        if (matches && matches.length > 0) {
+          questionsArray = matches.map(match => {
+            // Clean up the match
+            return match
+              .replace(/^["'\d\-\.\*\s]+/, '')  // Remove quotes, numbers, bullets
+              .replace(/["']$/g, '')           // Remove trailing quotes
+              .trim();
+          }).filter(q => q.length > 10); // Filter out very short strings
+
+          if (questionsArray.length > 0) {
+            console.log(`Found ${questionsArray.length} questions with pattern`);
+            break;
+          }
+        }
+      }
+    }
+
+    // 🔧 UPDATED: Better cleaning filter
+    const cleanQuestionsArray = questionsArray
+      .filter(item => {
+        if (!item || typeof item !== 'string') return false;
+        const lowerItem = item.toLowerCase();
+        return (
+          item.length > 10 && // Reasonable question length
+          item.includes('?') && // Should be a question
+          !lowerItem.includes('<think>') &&
+          !lowerItem.includes('</think>') &&
+          !lowerItem.includes('okay') &&
+          !lowerItem.includes('let me') &&
+          !lowerItem.includes('first') &&
+          !lowerItem.includes('second') &&
+          !lowerItem.includes('third') &&
+          !lowerItem.includes('behavioral questions') &&
+          !lowerItem.includes('technical questions') &&
+          !lowerItem.includes('example response') &&
+          !lowerItem.includes('generate') &&
+          !lowerItem.includes('instructions')
+        );
+      })
+      .slice(0, parseInt(amount) || 5); // Limit to requested amount
+
+    // Ensure we have at least SOME questions
+    if (cleanQuestionsArray.length === 0) {
+      console.log("No questions extracted, using fallback questions");
+      const fallbackQuestions = [
+        `Tell me about your experience with ${role} roles.`,
+        `How do you approach problem-solving in your work?`,
+        `What are your strengths when working with ${techstack || 'technology'}?`,
+        `Describe a challenging project you worked on.`,
+        `How do you stay updated with industry trends?`
+      ];
+      cleanQuestionsArray.push(...fallbackQuestions.slice(0, parseInt(amount) || 3));
+    }
+
+    console.log("Final clean questions:", cleanQuestionsArray);
 
     const interview = {
       role: role,
       type: type,
       level: level,
       techstack: typeof techstack === 'string' ? techstack.split(",").map((t: string) => t.trim()) : techstack,
-      questions: cleanQuestionsArray, // Save clean questions to Firebase
+      questions: cleanQuestionsArray,
       userId: userid,
       finalized: true,
       coverImage: getRandomInterviewCover(),
@@ -142,7 +212,6 @@ export async function POST(request: NextRequest) {
     console.log("API Success: Clean questions ready for Vapi:", cleanQuestionsArray);
 
     // ✅ FINAL FIX: Return ONLY the clean questions array as the response
-    // This makes the entire HTTP response body be the tool's result
     return NextResponse.json(cleanQuestionsArray, {
       status: 200
     });
