@@ -6,7 +6,7 @@ export async function POST(request: NextRequest) {
   try {
     const { type, role, level, techstack, amount, userid } = await request.json();
 
-    // Build the prompt for Hugging Face
+    // Build the prompt for Hugging Face (your working prompt)
     const prompt = `Prepare questions for a job interview.
       The job role is ${role}.
       The job experience level is ${level}.
@@ -20,10 +20,11 @@ export async function POST(request: NextRequest) {
 
       Thank you! <3`;
 
-    const apiKey = process.env.HUGGINGFACE_API_KEY!;
+    // ✅ CRITICAL: Use the CORRECT environment variable name
+    const apiKey = process.env.HUGGINGFACE_API_KEY!; // MUST be set in Vercel
     const targetModel = "HuggingFaceTB/SmolLM3-3B";
 
-    // Direct call to Hugging Face router endpoint
+    // Your working Hugging Face call
     const response = await fetch(
       "https://router.huggingface.co/v1/chat/completions",
       {
@@ -34,12 +35,7 @@ export async function POST(request: NextRequest) {
         },
         body: JSON.stringify({
           model: targetModel,
-          messages: [
-            {
-              "role": "user",
-              "content": prompt
-            }
-          ],
+          messages: [{ "role": "user", "content": prompt }],
           max_tokens: 500,
         })
       }
@@ -69,6 +65,7 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    // Save to Firebase (original logic)
     const interview = {
       role: role,
       type: type,
@@ -83,53 +80,17 @@ export async function POST(request: NextRequest) {
 
     await db.collection("interviews").add(interview);
 
-    // ✅ OPTION 2 FIX: Return data as a plain JSON string (not wrapped in an object)
-    const resultString = JSON.stringify({
-      success: true,
-      questions: questionsArray,
-      count: questionsArray.length,
-      role: role,
-      level: level,
-      techstack: techstack,
-      type: type,
-      userid: userid,
-      message: `Generated ${questionsArray.length} questions for ${role} position`
-    });
-
-    console.log("Sending Vapi response string:", resultString);
-
-    // Return the string directly
-    return new NextResponse(resultString, {
-      status: 200,
-      headers: { 'Content-Type': 'application/json' }
-    });
+    // 🎯🎯🎯 CRITICAL FIX: Return the ORIGINAL expected format
+    return NextResponse.json({ success: true }, { status: 200 });
 
   } catch (error: any) {
     console.error("Error:", error);
-
-    // Return error as a plain JSON string
-    const errorString = JSON.stringify({
-      success: false,
-      error: error.message || "Internal server error"
-    });
-
-    return new NextResponse(errorString, {
-      status: 500,
-      headers: { 'Content-Type': 'application/json' }
-    });
+    // Also return the original error format
+    return NextResponse.json({ success: false, error: error.message }, { status: 500 });
   }
 }
 
 export async function GET() {
-  // Also return a plain string for GET
-  const resultString = JSON.stringify({
-    success: true,
-    data: "Thank you!",
-    message: "API is working"
-  });
-
-  return new NextResponse(resultString, {
-    status: 200,
-    headers: { 'Content-Type': 'application/json' }
-  });
+  // Return the original GET format
+  return NextResponse.json({ success: true, data: "Thank you!" }, { status: 200 });
 }
