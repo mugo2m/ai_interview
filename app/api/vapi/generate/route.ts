@@ -20,7 +20,6 @@ export async function POST(request: NextRequest) {
 
       Thank you! <3`;
 
-    // 🚨 FIX 1: Use HUGGINGFACE_API_KEY, not Google key
     const apiKey = process.env.GOOGLE_GENERATIVE_AI_API_KEY!;
     const targetModel = "HuggingFaceTB/SmolLM3-3B";
 
@@ -84,44 +83,53 @@ export async function POST(request: NextRequest) {
 
     await db.collection("interviews").add(interview);
 
-    // 🚨 FIX 2: Vapi REQUIRES "output" field with stringified data
-    const vapiResponse = {
-      output: JSON.stringify({
-        success: true,
-        questions: questionsArray,
-        count: questionsArray.length,
-        role: role,
-        level: level,
-        techstack: techstack,
-        type: type,
-        userid: userid,
-        message: `Generated ${questionsArray.length} questions for ${role} position`
-      })
-    };
+    // ✅ OPTION 2 FIX: Return data as a plain JSON string (not wrapped in an object)
+    const resultString = JSON.stringify({
+      success: true,
+      questions: questionsArray,
+      count: questionsArray.length,
+      role: role,
+      level: level,
+      techstack: techstack,
+      type: type,
+      userid: userid,
+      message: `Generated ${questionsArray.length} questions for ${role} position`
+    });
 
-    console.log("Sending Vapi response:", vapiResponse);
+    console.log("Sending Vapi response string:", resultString);
 
-    return NextResponse.json(vapiResponse, { status: 200 });
+    // Return the string directly
+    return new NextResponse(resultString, {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' }
+    });
 
   } catch (error: any) {
     console.error("Error:", error);
 
-    // Even errors need Vapi format
-    return NextResponse.json({
-      output: JSON.stringify({
-        success: false,
-        error: error.message || "Internal server error"
-      })
-    }, { status: 500 });
+    // Return error as a plain JSON string
+    const errorString = JSON.stringify({
+      success: false,
+      error: error.message || "Internal server error"
+    });
+
+    return new NextResponse(errorString, {
+      status: 500,
+      headers: { 'Content-Type': 'application/json' }
+    });
   }
 }
 
 export async function GET() {
-  return NextResponse.json({
-    output: JSON.stringify({
-      success: true,
-      data: "Thank you!",
-      message: "API is working"
-    })
-  }, { status: 200 });
+  // Also return a plain string for GET
+  const resultString = JSON.stringify({
+    success: true,
+    data: "Thank you!",
+    message: "API is working"
+  });
+
+  return new NextResponse(resultString, {
+    status: 200,
+    headers: { 'Content-Type': 'application/json' }
+  });
 }
