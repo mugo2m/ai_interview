@@ -20,7 +20,7 @@ export async function POST(request: NextRequest) {
 
       Thank you! <3`;
 
-    const apiKey = process.env.GOOGLE_GENERATIVE_AI_API_KEY!;
+    const apiKey = process.env.HUGGINGFACE_API_KEY!;
     const targetModel = "HuggingFaceTB/SmolLM3-3B";
 
     // Direct call to Hugging Face router endpoint
