@@ -4,33 +4,18 @@ import { getRandomInterviewCover } from "@/lib/utils";
 
 export async function POST(request: NextRequest) {
   try {
-    // 🔧 FIXED: Replace the broken JSON parsing with robust parsing
-    // Get raw body text first
+    // 🔧 FIXED: Simple JSON parsing
     const rawText = await request.text();
     console.log("Received raw request body:", rawText);
 
-    // Clean the text - find actual JSON content
-    const firstBrace = rawText.indexOf('{');
-    const lastBrace = rawText.lastIndexOf('}');
-
-    if (firstBrace === -1 || lastBrace === -1) {
-      console.error("No JSON object found in request");
-      return NextResponse.json(["Error: Request must contain a JSON object"], {
-        status: 400
-      });
-    }
-
-    // Extract just the JSON part
-    const jsonText = rawText.substring(firstBrace, lastBrace + 1);
-    console.log("Extracted JSON text:", jsonText);
-
-    // Parse the JSON
+    // Simple JSON parsing - remove all the complex logic
     let parsedBody;
     try {
-      parsedBody = JSON.parse(jsonText);
+      parsedBody = JSON.parse(rawText);
     } catch (parseError: any) {
       console.error("JSON parse error:", parseError.message);
-      return NextResponse.json([`Error: Invalid JSON format - ${parseError.message}`], {
+      console.error("Raw text that failed:", rawText);
+      return NextResponse.json([`Error: Invalid JSON - ${parseError.message}`], {
         status: 400
       });
     }
