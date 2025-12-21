@@ -4,7 +4,46 @@ import { getRandomInterviewCover } from "@/lib/utils";
 
 export async function POST(request: NextRequest) {
   try {
-    const { type, role, level, techstack, amount, userid } = await request.json();
+    // 🔧 FIXED: Replace the broken JSON parsing with robust parsing
+    // Get raw body text first
+    const rawText = await request.text();
+    console.log("Received raw request body:", rawText);
+
+    // Clean the text - find actual JSON content
+    const firstBrace = rawText.indexOf('{');
+    const lastBrace = rawText.lastIndexOf('}');
+
+    if (firstBrace === -1 || lastBrace === -1) {
+      console.error("No JSON object found in request");
+      return NextResponse.json(["Error: Request must contain a JSON object"], {
+        status: 400
+      });
+    }
+
+    // Extract just the JSON part
+    const jsonText = rawText.substring(firstBrace, lastBrace + 1);
+    console.log("Extracted JSON text:", jsonText);
+
+    // Parse the JSON
+    let parsedBody;
+    try {
+      parsedBody = JSON.parse(jsonText);
+    } catch (parseError: any) {
+      console.error("JSON parse error:", parseError.message);
+      return NextResponse.json([`Error: Invalid JSON format - ${parseError.message}`], {
+        status: 400
+      });
+    }
+
+    // Extract parameters with defaults
+    const {
+      type = "technical",
+      role = "Software Engineer",
+      level = "mid",
+      techstack = "",
+      amount = "5",
+      userid = "anonymous"
+    } = parsedBody;
 
     // Build the prompt for Hugging Face
     const prompt = `Prepare questions for a job interview.
