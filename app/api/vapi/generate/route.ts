@@ -196,8 +196,29 @@ Now generate ${amount} ${type} questions for ${role} with ${techstack}:`;
 
     console.log("API Success: Clean questions ready for Vapi:", cleanQuestionsArray);
 
+    // 🔍 DEBUG: Add this before returning
+    console.log("=== DEBUGGING RESPONSE FORMAT ===");
+    console.log("1. cleanQuestionsArray value:", cleanQuestionsArray);
+    console.log("2. Type of cleanQuestionsArray:", typeof cleanQuestionsArray);
+    console.log("3. Is array?", Array.isArray(cleanQuestionsArray));
+    console.log("4. If string, length:", typeof cleanQuestionsArray === 'string' ? cleanQuestionsArray.length : 'N/A');
+    console.log("5. If array, length:", Array.isArray(cleanQuestionsArray) ? cleanQuestionsArray.length : 'N/A');
+    console.log("6. If array, first item:", Array.isArray(cleanQuestionsArray) ? cleanQuestionsArray[0] : 'N/A');
+
+    // Ensure it's always an array for Vapi
+    let finalResponse;
+    if (Array.isArray(cleanQuestionsArray)) {
+      finalResponse = cleanQuestionsArray;
+    } else {
+      console.warn("WARNING: cleanQuestionsArray is not an array! Converting to array.");
+      finalResponse = [String(cleanQuestionsArray)];
+    }
+
+    console.log("7. Final response being sent:", finalResponse);
+    console.log("8. Final response is array?", Array.isArray(finalResponse));
+
     // ✅ FINAL FIX: Return ONLY the clean questions array as the response
-    return NextResponse.json(cleanQuestionsArray, {
+    return NextResponse.json(finalResponse, {
       status: 200
     });
 
