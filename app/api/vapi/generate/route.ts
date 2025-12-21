@@ -6,7 +6,7 @@ export async function POST(request: NextRequest) {
   try {
     const { type, role, level, techstack, amount, userid } = await request.json();
 
-    // Build the prompt for Hugging Face (your working prompt)
+    // Build the prompt for Hugging Face
     const prompt = `Prepare questions for a job interview.
       The job role is ${role}.
       The job experience level is ${level}.
@@ -20,11 +20,10 @@ export async function POST(request: NextRequest) {
 
       Thank you! <3`;
 
-    // ✅ CRITICAL: Use the CORRECT environment variable name
-    const apiKey = process.env.HUGGINGFACE_API_KEY!; // MUST be set in Vercel
+    const apiKey = process.env.HUGGINGFACE_API_KEY!;
     const targetModel = "HuggingFaceTB/SmolLM3-3B";
 
-    // Your working Hugging Face call
+    // Direct call to Hugging Face router endpoint
     const response = await fetch(
       "https://router.huggingface.co/v1/chat/completions",
       {
@@ -35,7 +34,12 @@ export async function POST(request: NextRequest) {
         },
         body: JSON.stringify({
           model: targetModel,
-          messages: [{ "role": "user", "content": prompt }],
+          messages: [
+            {
+              "role": "user",
+              "content": prompt
+            }
+          ],
           max_tokens: 500,
         })
       }
@@ -49,7 +53,7 @@ export async function POST(request: NextRequest) {
     const data = await response.json();
     const generatedText = data.choices[0]?.message?.content || "No response generated";
 
-    // Parse the questions
+    // Parse the questions (should be in array format)
     let questionsArray;
     try {
       questionsArray = JSON.parse(generatedText);
@@ -65,13 +69,29 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Save to Firebase (original logic)
+    // ✅ FINAL FIX: Clean the questions array - remove <think> tags and reasoning text
+    const cleanQuestionsArray = questionsArray.filter(item => {
+      const lowerItem = item.toLowerCase();
+      return (
+        item !== "<think>" &&
+        item !== "</think>" &&
+        !lowerItem.includes("okay, let's see") &&
+        !lowerItem.includes("first, for technical questions") &&
+        !lowerItem.includes("behavioral questions are about") &&
+        !lowerItem.includes("since it's entry-level") &&
+        !lowerItem.includes("i need to make sure") &&
+        !lowerItem.includes("let me draft them") &&
+        !lowerItem.includes("that should cover the mix") &&
+        !lowerItem.includes("alright, that should work")
+      );
+    });
+
     const interview = {
       role: role,
       type: type,
       level: level,
       techstack: typeof techstack === 'string' ? techstack.split(",").map((t: string) => t.trim()) : techstack,
-      questions: questionsArray,
+      questions: cleanQuestionsArray, // Save clean questions to Firebase
       userId: userid,
       finalized: true,
       coverImage: getRandomInterviewCover(),
@@ -80,17 +100,27 @@ export async function POST(request: NextRequest) {
 
     await db.collection("interviews").add(interview);
 
-    // 🎯🎯🎯 CRITICAL FIX: Return the ORIGINAL expected format
-    return NextResponse.json({ success: true }, { status: 200 });
+    console.log("API Success: Clean questions ready for Vapi:", cleanQuestionsArray);
+
+    // ✅ FINAL FIX: Return ONLY the clean questions array as the response
+    // This makes the entire HTTP response body be the tool's result
+    return NextResponse.json(cleanQuestionsArray, {
+      status: 200
+    });
 
   } catch (error: any) {
     console.error("Error:", error);
-    // Also return the original error format
-    return NextResponse.json({ success: false, error: error.message }, { status: 500 });
+
+    // Return a simple error array for consistency
+    return NextResponse.json([`Error: ${error.message}`], {
+      status: 500
+    });
   }
 }
 
 export async function GET() {
-  // Return the original GET format
-  return NextResponse.json({ success: true, data: "Thank you!" }, { status: 200 });
+  // Return a simple array for GET requests too
+  return NextResponse.json(["API is operational"], {
+    status: 200
+  });
 }
