@@ -101,7 +101,7 @@ export const mappings: Record<string, string> = {
 };
 
 /* =========================
-   INTERVIEWER (GEMINI)
+   INTERVIEWER (HUGGING FACE)
 ========================= */
 export const interviewer: CreateAssistantDTO = {
   name: "Interviewer",
@@ -110,9 +110,8 @@ export const interviewer: CreateAssistantDTO = {
     "Hello! Thank you for taking the time to speak with me today. I'm excited to learn more about you and your experience.",
 
   transcriber: {
-    provider: "deepgram",
-    model: "nova-2",
-    language: "en",
+    provider: "assemblyai",
+    model: "best",
   },
 
   voice: {
@@ -126,8 +125,8 @@ export const interviewer: CreateAssistantDTO = {
   },
 
   model: {
-    provider: "google",
-    model: "gemini-1.5-flash",
+    provider: "openai",
+    model: "HuggingFaceTB/SmolLM3-3B",
     systemPrompt: `You are a professional job interviewer conducting a real-time voice interview with a candidate.
 
 Interview Guidelines:
@@ -140,6 +139,8 @@ Interview Guidelines:
 
 Be professional, warm, and polite.
 End the interview by thanking the candidate and informing them that feedback will follow.`,
+    temperature: 0.7,
+    maxTokens: 150,
   },
 };
 

@@ -4,11 +4,9 @@ import { getRandomInterviewCover } from "@/lib/utils";
 
 export async function POST(request: NextRequest) {
   try {
-    // 🔧 FIXED: Simple JSON parsing
     const rawText = await request.text();
     console.log("Received raw request body:", rawText);
 
-    // Simple JSON parsing - remove all the complex logic
     let parsedBody;
     try {
       parsedBody = JSON.parse(rawText);
@@ -20,7 +18,6 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    // Extract parameters with defaults
     const {
       type = "technical",
       role = "Software Engineer",
@@ -30,7 +27,6 @@ export async function POST(request: NextRequest) {
       userid = "anonymous"
     } = parsedBody;
 
-    // 🔧 UPDATED: Better prompt for Hugging Face
     const prompt = `You are a job interview question generator. Generate exactly ${amount} questions for a ${role} position.
 Experience level: ${level}
 Tech stack: ${techstack}
@@ -48,46 +44,41 @@ Example response for Data Scientist with SQL/R:
 
 Now generate ${amount} ${type} questions for ${role} with ${techstack}:`;
 
-    const apiKey = process.env.HUGGINGFACE_API_KEY!;
-    const targetModel = "HuggingFaceTB/SmolLM3-3B";
+    const apiKey = process.env.GOOGLE_GENERATIVE_AI_API_KEY!;
 
-    // Direct call to Hugging Face router endpoint
+    // Gemini Flash API call
     const response = await fetch(
-      "https://router.huggingface.co/v1/chat/completions",
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`,
       {
         method: "POST",
         headers: {
-          "Authorization": `Bearer ${apiKey}`,
           "Content-Type": "application/json"
         },
         body: JSON.stringify({
-          model: targetModel,
-          messages: [
-            {
-              "role": "user",
-              "content": prompt
-            }
-          ],
-          max_tokens: 500,
-          temperature: 0.7, // Added for better creativity control
+          contents: [{
+            parts: [{ text: prompt }]
+          }],
+          generationConfig: {
+            temperature: 0.7,
+            maxOutputTokens: 500,
+            topP: 0.9,
+          }
         })
       }
     );
 
     if (!response.ok) {
       const errorText = await response.text();
-      throw new Error(`Hugging Face API error: ${response.status} - ${errorText}`);
+      throw new Error(`Gemini API error: ${response.status} - ${errorText}`);
     }
 
     const data = await response.json();
-    const generatedText = data.choices[0]?.message?.content || "No response generated";
+    const generatedText = data.candidates?.[0]?.content?.parts?.[0]?.text || "No response generated";
 
     console.log("Raw AI response:", generatedText);
 
-    // 🔧 IMPROVED: Better question parsing
     let questionsArray = [];
 
-    // Try to extract JSON array with more flexible matching
     const arrayMatch = generatedText.match(/\[\s*["'][^\[\]]*["'](?:\s*,\s*["'][^\[\]]*["'])*\s*\]/s);
 
     if (arrayMatch) {
@@ -96,7 +87,6 @@ Now generate ${amount} ${type} questions for ${role} with ${techstack}:`;
         console.log("Found array via regex:", questionsArray);
       } catch (parseError) {
         console.log("Regex match found but failed to parse:", arrayMatch[0]);
-        // Try cleaning the matched text
         try {
           const cleanMatch = arrayMatch[0]
             .replace(/[\n\r]/g, '')
@@ -109,29 +99,26 @@ Now generate ${amount} ${type} questions for ${role} with ${techstack}:`;
       }
     }
 
-    // If no array found, try to extract questions from text
     if (questionsArray.length === 0) {
       console.log("No array found, extracting from text...");
 
-      // Look for question patterns in the text
       const questionPatterns = [
-        /["']([^"']+\?)["']/g,  // Text in quotes ending with ?
-        /\d+\.\s*([^\n]+\?)/g,   // Numbered questions: 1. Question?
-        /-\s*([^\n]+\?)/g,       // Bullet questions: - Question?
-        /\*\s*([^\n]+\?)/g,      // Star questions: * Question?
-        /([A-Z][^.!?]*\?)/g      // Any sentence ending with ?
+        /["']([^"']+\?)["']/g,
+        /\d+\.\s*([^\n]+\?)/g,
+        /-\s*([^\n]+\?)/g,
+        /\*\s*([^\n]+\?)/g,
+        /([A-Z][^.!?]*\?)/g
       ];
 
       for (const pattern of questionPatterns) {
         const matches = generatedText.match(pattern);
         if (matches && matches.length > 0) {
           questionsArray = matches.map(match => {
-            // Clean up the match
             return match
-              .replace(/^["'\d\-\.\*\s]+/, '')  // Remove quotes, numbers, bullets
-              .replace(/["']$/g, '')           // Remove trailing quotes
+              .replace(/^["'\d\-\.\*\s]+/, '')
+              .replace(/["']$/g, '')
               .trim();
-          }).filter(q => q.length > 10); // Filter out very short strings
+          }).filter(q => q.length > 10);
 
           if (questionsArray.length > 0) {
             console.log(`Found ${questionsArray.length} questions with pattern`);
@@ -141,14 +128,13 @@ Now generate ${amount} ${type} questions for ${role} with ${techstack}:`;
       }
     }
 
-    // 🔧 UPDATED: Better cleaning filter
     const cleanQuestionsArray = questionsArray
       .filter(item => {
         if (!item || typeof item !== 'string') return false;
         const lowerItem = item.toLowerCase();
         return (
-          item.length > 10 && // Reasonable question length
-          item.includes('?') && // Should be a question
+          item.length > 10 &&
+          item.includes('?') &&
           !lowerItem.includes('<think>') &&
           !lowerItem.includes('</think>') &&
           !lowerItem.includes('okay') &&
@@ -163,9 +149,8 @@ Now generate ${amount} ${type} questions for ${role} with ${techstack}:`;
           !lowerItem.includes('instructions')
         );
       })
-      .slice(0, parseInt(amount) || 5); // Limit to requested amount
+      .slice(0, parseInt(amount) || 5);
 
-    // Ensure we have at least SOME questions
     if (cleanQuestionsArray.length === 0) {
       console.log("No questions extracted, using fallback questions");
       const fallbackQuestions = [
@@ -196,16 +181,6 @@ Now generate ${amount} ${type} questions for ${role} with ${techstack}:`;
 
     console.log("API Success: Clean questions ready for Vapi:", cleanQuestionsArray);
 
-    // 🔍 DEBUG: Add this before returning
-    console.log("=== DEBUGGING RESPONSE FORMAT ===");
-    console.log("1. cleanQuestionsArray value:", cleanQuestionsArray);
-    console.log("2. Type of cleanQuestionsArray:", typeof cleanQuestionsArray);
-    console.log("3. Is array?", Array.isArray(cleanQuestionsArray));
-    console.log("4. If string, length:", typeof cleanQuestionsArray === 'string' ? cleanQuestionsArray.length : 'N/A');
-    console.log("5. If array, length:", Array.isArray(cleanQuestionsArray) ? cleanQuestionsArray.length : 'N/A');
-    console.log("6. If array, first item:", Array.isArray(cleanQuestionsArray) ? cleanQuestionsArray[0] : 'N/A');
-
-    // Ensure it's always an array for Vapi
     let finalResponse;
     if (Array.isArray(cleanQuestionsArray)) {
       finalResponse = cleanQuestionsArray;
@@ -214,18 +189,12 @@ Now generate ${amount} ${type} questions for ${role} with ${techstack}:`;
       finalResponse = [String(cleanQuestionsArray)];
     }
 
-    console.log("7. Final response being sent:", finalResponse);
-    console.log("8. Final response is array?", Array.isArray(finalResponse));
-
-    // ✅ FINAL FIX: Return ONLY the clean questions array as the response
     return NextResponse.json(finalResponse, {
       status: 200
     });
 
   } catch (error: any) {
     console.error("Error:", error);
-
-    // Return a simple error array for consistency
     return NextResponse.json([`Error: ${error.message}`], {
       status: 500
     });
@@ -233,7 +202,6 @@ Now generate ${amount} ${type} questions for ${role} with ${techstack}:`;
 }
 
 export async function GET() {
-  // Return a simple array for GET requests too
   return NextResponse.json(["API is operational"], {
     status: 200
   });

@@ -1,10 +1,16 @@
 "use server";
 
 import { generateObject } from "ai";
-import { google } from "@ai-sdk/google";
+import { createOpenAI } from "@ai-sdk/openai";
 
 import { db } from "@/firebase/admin";
 import { feedbackSchema } from "@/constants";
+
+// Create Hugging Face client
+const huggingface = createOpenAI({
+  apiKey: process.env.HUGGINGFACE_API_KEY!,
+  baseURL: "https://api-inference.huggingface.co/models/HuggingFaceTB/SmolLM3-3B/v1/",
+});
 
 export async function createFeedback(params: CreateFeedbackParams) {
   const { interviewId, userId, transcript, feedbackId } = params;
@@ -18,9 +24,7 @@ export async function createFeedback(params: CreateFeedbackParams) {
       .join("");
 
     const { object } = await generateObject({
-      model: google("gemini-2.0-flash-001", {
-        structuredOutputs: false,
-      }),
+      model: huggingface("HuggingFaceTB/SmolLM3-3B"),
       schema: feedbackSchema,
       prompt: `
         You are an AI interviewer analyzing a mock interview. Your task is to evaluate the candidate based on structured categories. Be thorough and detailed in your analysis. Don't be lenient with the candidate. If there are mistakes or areas for improvement, point them out.
@@ -132,4 +136,3 @@ export async function getLatestInterviews(
     ...doc.data(),
   })) as Interview[];
 }
-
